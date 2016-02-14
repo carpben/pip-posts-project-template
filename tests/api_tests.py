@@ -1,3 +1,4 @@
+import random
 import unittest
 import os
 import json
@@ -215,8 +216,182 @@ class TestAPI(unittest.TestCase):
 
         post = posts[0]
         self.assertEqual(post.title, "Example Post")
-        self.assertEqual(post.body, "Just a test")        
+        self.assertEqual(post.body, "Just a test")       
+        
+    def test_unsupported_mimetype(self):
+        data = "<xml></xml>"
+        response = self.client.post("/api/posts",
+            data=json.dumps(data),
+            content_type="application/xml",
+            headers=[("Accept", "application/json")]
+        )
 
+        self.assertEqual(response.status_code, 415)
+        self.assertEqual(response.mimetype, "application/json")
+
+        data = json.loads(response.data.decode("ascii"))
+        self.assertEqual(data["message"],
+                         "Request must contain application/json data")
+
+    def test_invalid_data(self):
+        """ Posting a post with an invalid body """
+        data = {
+            "title": "Example Post",
+            "body": 32
+        }
+
+        response = self.client.post("/api/posts",
+            data=json.dumps(data),
+            content_type="application/json",
+            headers=[("Accept", "application/json")]
+        )
+
+        self.assertEqual(response.status_code, 422)
+
+        data = json.loads(response.data.decode("ascii"))
+        self.assertEqual(data["message"], "32 is not of type 'string'")
+
+    def test_missing_data(self):
+        """ Posting a post with a missing body """
+        data = {
+            "title": "Example Post",
+        }
+
+        response = self.client.post("/api/posts",
+            data=json.dumps(data),
+            content_type="application/json",
+            headers=[("Accept", "application/json")]
+        )
+
+        self.assertEqual(response.status_code, 422)
+
+        data = json.loads(response.data.decode("ascii"))
+        self.assertEqual(data["message"], "'body' is a required property")
+
+    def test_edit_title(self): 
+        posts=[]
+        for i in range(1,11):
+            posts.append(models.Post(title="Post Title Number {}".format(i), body="Post body no {}".format(i)))
+        session.add_all(posts)
+        session.commit()
+        
+        posts = session.query(models.Post).all()
+        
+        random_num=random.choice(range(1,11))
+        random_post=session.query(models.Post).get(random_num)
+        
+        data = {
+            "title": "Edited Title", 
+            "body": random_post.body
+        }
+        
+        print (random_num)
+        response = self.client.put("/api/posts/{}".format(random_num),
+            data=json.dumps(data),
+            content_type="application/json",
+            headers=[("Accept", "application/json")]
+        )
+        
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.mimetype, "application/json")
+        self.assertEqual(urlparse(response.headers.get("Location")).path,
+                         "/api/posts/{}".format(random_num))
+
+        data = json.loads(response.data.decode("ascii"))
+        self.assertEqual(data["id"], random_num)
+        self.assertEqual(data["title"], "Edited Title")
+        self.assertEqual(data["body"], "Post body no {}".format(random_num)) 
+
+        posts = session.query(models.Post).all()
+        self.assertEqual(len(posts), 10)
+
+        random_post=session.query(models.Post).get(random_num)
+        self.assertEqual(random_post.title, "Edited Title")
+        self.assertEqual(random_post.body, "Post body no {}".format(random_num))       
+
+    def test_edit_body(self): 
+        # editing title 
+        posts=[]
+        for i in range(1,11):
+            posts.append(models.Post(title="Post Title Number {}".format(i), body="Post body no {}".format(i)))
+        session.add_all(posts)
+        session.commit()
+        
+        random_num=random.choice(range(1,11))
+        random_post=session.query(models.Post).get(random_num)
+        
+        data = {
+            "title": random_post.title, 
+            "body": "Edited body"
+        }
+        random_post=random.choice(range(1,11))
+        response = self.client.put("/api/posts/{}".format(random_num),
+            data=json.dumps(data),
+            content_type="application/json",
+            headers=[("Accept", "application/json")]
+        )
+        
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.mimetype, "application/json")
+        self.assertEqual(urlparse(response.headers.get("Location")).path,
+                         "/api/posts/{}".format(random_num))
+
+        data = json.loads(response.data.decode("ascii"))
+        self.assertEqual(data["id"], random_num)
+        self.assertEqual(data["title"], "Post Title Number {}".format(random_num))
+        self.assertEqual(data["body"], "Edited body") 
+
+        posts = session.query(models.Post).all()
+        
+        for i in range(0,10):
+            print (posts[i].title)
+        
+        self.assertEqual(len(posts), 10)
+
+        random_post=session.query(models.Post).get(random_num)
+        self.assertEqual(random_post.title, "Post Title Number {}".format(random_num))
+        self.assertEqual(random_post.body, "Edited body")       
+        
+    def test_edit_title_and_body(self): 
+        posts=[]
+        for i in range(1,11):
+            posts.append(models.Post(title="Post Title Number {}".format(i), body="Post body no {}".format(i)))
+        session.add_all(posts)
+        session.commit()
+        
+        random_num=random.choice(range(1,11))
+        random_post=session.query(models.Post).get(random_num)
+        
+        data = {
+            "title": "Edited Title",
+            "body": "Edited body"
+        }
+        random_post=random.choice(range(1,11))
+        response = self.client.put("/api/posts/{}".format(random_num),
+            data=json.dumps(data),
+            content_type="application/json",
+            headers=[("Accept", "application/json")]
+        )
+        
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.mimetype, "application/json")
+        self.assertEqual(urlparse(response.headers.get("Location")).path,
+                         "/api/posts/{}".format(random_num))
+
+        data = json.loads(response.data.decode("ascii"))
+        self.assertEqual(data["id"], random_num)
+        self.assertEqual(data["title"], "Edited Title")
+        self.assertEqual(data["body"], "Edited body") 
+
+        posts = session.query(models.Post).all()
+        self.assertEqual(len(posts), 10)
+        
+        for i in range(0,10):
+            print (posts[i].title)
+        
+        random_post=session.query(models.Post).get(random_num)
+        self.assertEqual(random_post.title, "Edited Title")
+        self.assertEqual(random_post.body, "Edited body")       
 
 if __name__ == "__main__":
     unittest.main()
